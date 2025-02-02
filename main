@@ -1,0 +1,63 @@
+WITH revenue_subquery AS (
+  SELECT
+    continent,
+    SUM(price) AS Revenue,
+    SUM(CASE WHEN sp.device = 'mobile' THEN price ELSE 0 END) AS `Revenue from Mobile`,
+    SUM(CASE WHEN sp.device = 'desktop' THEN price ELSE 0 END) AS `Revenue from Desktop`
+  FROM `data-analytics-mate.DA.session_params` sp
+  JOIN `data-analytics-mate.DA.order` AS o
+    ON sp.ga_session_id = o.ga_session_id
+  JOIN `data-analytics-mate.DA.product` AS p
+    ON p.item_id = o.item_id
+  GROUP BY continent
+),
+revenue_info AS (
+  SELECT
+    continent,
+    Revenue,
+    `Revenue from Mobile`,
+    `Revenue from Desktop`,
+    ROUND(Revenue / SUM(Revenue) OVER () * 100, 2) AS `% Revenue from Total`
+  FROM revenue_subquery
+),
+account_info AS (
+  SELECT
+    continent,
+    COUNT(acc.id) AS `Account Count`,
+    COUNT(CASE WHEN acc.is_verified = 1 THEN acc.id END) AS `Verified Account`
+  FROM `data-analytics-mate.DA.session_params` sp
+  JOIN `data-analytics-mate.DA.account_session` acs
+    ON acs.ga_session_id = sp.ga_session_id
+  JOIN `data-analytics-mate.DA.account` acc
+    ON acc.id = acs.account_id
+  GROUP BY continent
+),
+session_info AS (
+  SELECT
+    continent,
+    COUNT(session.ga_session_id) AS `Session Count`
+  FROM `data-analytics-mate.DA.session_params` sp
+  JOIN `data-analytics-mate.DA.session` AS session
+    ON session.ga_session_id = sp.ga_session_id
+  GROUP BY continent
+),
+final_result AS (
+  SELECT
+    account_info.continent,
+    Revenue,
+    `Revenue from Mobile`,
+    `Revenue from Desktop`,
+    `% Revenue from Total`,
+    `Account Count`,
+    `Verified Account`,
+    `Session Count`
+  FROM account_info
+  JOIN revenue_info
+    ON account_info.continent = revenue_info.continent
+  JOIN session_info
+    ON account_info.continent = session_info.continent
+)
+
+
+SELECT *
+FROM final_result;
